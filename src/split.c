@@ -1,6 +1,6 @@
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 #include "string_help.h"
 
 char **split(char *str, const char *delim, int *count) {
@@ -10,6 +10,7 @@ char **split(char *str, const char *delim, int *count) {
         return NULL;
     }
 
+    // Count tokens
     int tokens = 0;
     char *tmp = tempString;
     while ((tmp = strpbrk(tmp, delim))) {
@@ -18,6 +19,7 @@ char **split(char *str, const char *delim, int *count) {
     }
     tokens++; // Account for the last token
 
+    // Allocate memory for array of strings
     char **arrayOfStrings = malloc((tokens + 1) * sizeof(char *));
     if (arrayOfStrings == NULL) {
         perror("Failed to allocate memory");
@@ -25,6 +27,7 @@ char **split(char *str, const char *delim, int *count) {
         return NULL;
     }
 
+    // Tokenize the string and populate the array
     int i = 0;
     char *token = strtok(tempString, delim);
     while (token != NULL) {
@@ -41,10 +44,10 @@ char **split(char *str, const char *delim, int *count) {
         token = strtok(NULL, delim);
         i++;
     }
-    arrayOfStrings[i] = NULL;
-    *count = tokens;
+    arrayOfStrings[i] = NULL; // Null-terminate the array
+    *count = tokens; // Set the count of tokens
 
-    free(tempString);
+    free(tempString); // Free temporary string
 
-    return arrayOfStrings;
+    return arrayOfStrings; // Return array of strings
 }
