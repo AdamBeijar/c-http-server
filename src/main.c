@@ -41,11 +41,10 @@ char *create_json_str(char **lines, int line_count) {
         if (found_json == 1) {
             char *line = strdup(lines[i]);
             line = strip(line);
-            char *newline = malloc(strlen(line) + 1);
-            strcpy(newline, line);
             json_str = realloc(json_str, strlen(json_str) + strlen(line) + 1);
             strcat(json_str, line);
         }
+        free(lines[i]);
     }
 
     return json_str;
@@ -83,6 +82,11 @@ struct data_struct *create_form(char **lines, char *boundary, char* boundaryend,
             name[strlen(name) - 1] = '\0'; // Remove the \r from the end of the name and replace it with \0
             char *value = strdup(lines[i + 3]); // Get the value
             removeAllSubString(value, "\r\n"); // Remove the \r\n from the end of the value
+            if (strcmp(value, "") == 0 || strcmp(name, "") == 0){
+                free(name);
+                free(value);
+                continue;
+            }
             strip(value); // Strip the value
             form_array[form_index].key = strdup(name); 
             form_array[form_index].value = strdup(value);
@@ -140,10 +144,11 @@ int main() {
 
         read(new_socket, buffer, 30000); // Read the request from the client
 
-        printf("%s\n", buffer); // Print the request
+        //printf("%s\n", buffer); // Print the request
 
         int line_count;
         char **lines = split(buffer, "\n", &line_count); // Split the request into lines
+        lines = realloc(lines, line_count * sizeof(char *)); // Reallocate memory for the lines
 
         struct request {
             char *method;
@@ -188,6 +193,7 @@ int main() {
                     int word_count;
                     char **words = split(lines[i], " ", &word_count);
                     if (words != NULL && word_count >= 2) {
+                        req.content_type = realloc(req.content_type, strlen(words[1]) + 1);
                         req.content_type = strdup(words[1]);
                         req.content_type[strlen(req.content_type) - 1] = '\0';
                         if(strcmp(req.content_type, "multipart/form-data") == 0) {
@@ -244,6 +250,7 @@ int main() {
                                 free(words[j]);
                             }
                             free(words);
+                            break;
                         } else if (strcmp(req.content_type, "application/x-www-form-urlencoded") == 0) {
                             int word_count;
                             char **words = split(lines[i], " ", &word_count);
@@ -268,7 +275,6 @@ int main() {
                                 free(data);
                             }
                         } else if (strcmp(req.content_type, "application/json") == 0) {
-                            printf("JSON");
                             int word_count;
                             char **words = split(lines[i], " ", &word_count);
                             if (words != NULL && word_count >= 2) {
@@ -278,7 +284,6 @@ int main() {
                                     {
                                         char *json_str = create_json_str(lines, line_count);
                                         lexer_t *lexer = create_lexer(json_str);
-                                        printf("Lexer input: %s\n", lexer->input);
                                         json_value_t *value = parse_value(lexer);
                                         req.data_union.json_data = value->value.object;
                                         req.data_size = 1;
@@ -290,23 +295,20 @@ int main() {
                                 free(words[j]);
                             }
                             free(words);
-                            printf("Content-Type HEJHOPP: %s\n", req.content_type);
                             break;
                         } else {
-                            printf("Content-Type: %s\n", req.content_type);
-                            printf("HELL YEAH\n");
                         }
                     }
                 }
                 if(req.content_type == NULL) {
-                    printf("Content-Type: %s\n", req.content_type);
                     free(lines[i]);
                 } else if (strcmp(req.content_type, "application/json") != 0){
-                    printf("Content-Type: %s\n", req.content_type);
                     free(lines[i]);
                 }
             }
             free(lines); // Free the array of lines
+            //clear the buffer
+            memset(buffer, 0, sizeof(buffer));
         }
 
         printf("Method: %s\n", req.method);

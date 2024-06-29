@@ -4,6 +4,7 @@
 #include "string_help.h"
 
 char *strip(char *str) {
+    printf("Stripping: %s\n", str);
     size_t start, end;
 
     // Find the first non-whitespace character from the beginning
