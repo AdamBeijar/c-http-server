@@ -3,27 +3,20 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include "string_help.h"
-#include "json.h"
+#include "string_help/string_help.h"
+#include "json/json.h"
+#include "request_type/request_type.h"
+#include "views_and_paths/path.h"
 
 #define PORT 8080 // Default port, TODO: make this configurable
-#define RESPONSE \
-    "HTTP/1.1 200 OK\n" \
-    "Content-Type: text/plain\n"\
-    "Content-Length: 12\n\n"\
-    "Hello world!" // Default response, TODO: make this configurable
 #define MAX_LINES 100
 #define RESPONSE_SIZE 300 
+#define RESPONSE_SEND_SIZE 1024
 
 void error(char *msg) {
     perror(msg);
     exit(1);
 }
-
-struct data_struct { // Struct to hold form data
-    char *key;
-    char *value;
-};
 
 char *create_json_str(char **lines, int line_count) {
     char *json_str = malloc(1000 * sizeof(char));
@@ -51,8 +44,8 @@ char *create_json_str(char **lines, int line_count) {
 }
 
 // Function to transfer the form string to a struct that is usable
-struct data_struct *create_form(char **lines, char *boundary, char* boundaryend, int line_count, int *form_data_size) {
-    struct data_struct *form_array = malloc(100 * sizeof(struct data_struct)); // Allocate memory for the form data
+data_t *create_form(char **lines, char *boundary, char* boundaryend, int line_count, int *form_data_size) {
+    data_t *form_array = malloc(100 * sizeof(data_t)); // Allocate memory for the form data
     if (form_array == NULL) {
         perror("Failed to allocate memory");
         return NULL;
@@ -150,20 +143,7 @@ int main() {
         char **lines = split(buffer, "\n", &line_count); // Split the request into lines
         lines = realloc(lines, line_count * sizeof(char *)); // Reallocate memory for the lines
 
-        struct request {
-            char *method;
-            char *path;
-            char *version;
-            char *content_type;
-            int content_length;
-            union
-            {
-                struct data_struct form_data[100];
-                json_object_t *json_data;
-            } data_union;
-            
-            int data_size;
-        };
+        
 
         struct request req;
         memset(&req, 0, sizeof(req)); // Initialize the request structure
@@ -180,6 +160,8 @@ int main() {
                         req.method = strdup(words[0]);
                         req.path = strdup(words[1]);
                         req.version = strdup(words[2]);
+
+                        printf("Path: %s\n", req.path);
 
 
                         // Free the words array
@@ -225,7 +207,7 @@ int main() {
                             }
 
                             int form_data_size;
-                            struct data_struct *form_data = create_form(&lines[i + 1], boundary, preboundaryendcat, line_count, &form_data_size); // Create the form data
+                            data_t *form_data = create_form(&lines[i + 1], boundary, preboundaryendcat, line_count, &form_data_size); // Create the form data
                             req.data_size = form_data_size; // Set the form data size
 
                             if (form_data == NULL) {
@@ -311,31 +293,65 @@ int main() {
             memset(buffer, 0, sizeof(buffer));
         }
 
+        char *response = malloc(RESPONSE_SEND_SIZE * sizeof(char));
+
+        if (response == NULL) {
+            perror("Failed to allocate memory");
+            return 1;
+        }
+
+        if(includes(req.path, "?")){
+            char *current_path = strdup(req.path);
+            char **path_split = split(current_path, "?", &line_count);
+            req.path = strdup(path_split[0]);
+            char *query = strdup(path_split[1]);
+            printf("Query: %s\n", query);
+            printf("Path: %s\n", req.path);
+            int query_count;
+            char **query_split = split(query, "&", &query_count);
+            for (int i = 0; i < line_count - 1; i++) {
+                char **key_value = split(query_split[i], "=", &line_count);
+                req.data_union.form_data[i].key = strdup(key_value[0]);
+                req.data_union.form_data[i].value = strdup(key_value[1]);
+                req.data_size++;
+            }
+        }
+
+        response = find_view(&req); // Find the view that should be used
+        printf("response: %s\n", response);
+
+        // Print the request
         printf("Method: %s\n", req.method);
         printf("Path: %s\n", req.path);
         printf("Version: %s\n", req.version);
         printf("Content-Type: %s\n", req.content_type);
         printf("Content-Length: %d\n", req.content_length);
         printf("Data: \n");
-        if (req.data_size == 0) {
-            printf("    No data\n");
-        } else if (req.data_size > 0 && (strcmp(req.content_type, "multipart/form-data") == 0 || strcmp(req.content_type, "application/x-www-form-urlencoded") == 0)) {
+        if (req.content_type != NULL){
+            if (req.data_size == 0) {
+                printf("    No data\n");
+            } else if (req.data_size > 0 && (strcmp(req.content_type, "multipart/form-data") == 0 || strcmp(req.content_type, "application/x-www-form-urlencoded") == 0)) {
+                for (int i = 0; i < req.data_size; i++) {
+                    printf("    Key: %s\n", req.data_union.form_data[i].key);
+                    printf("    Value: %s\n", req.data_union.form_data[i].value);
+                }
+            } else if (req.data_size > 0 && strcmp(req.content_type, "application/json") == 0) {
+                json_pair_t *current_pair = req.data_union.json_data->head;
+                while (current_pair != NULL)
+                {
+                    printf("    Key: %s\n", current_pair->key);
+                    printf("    Value: %s\n", current_pair->value->value.string);
+                    current_pair = current_pair->next;
+                }
+            }
+        } else if(req.data_size > 0) {
             for (int i = 0; i < req.data_size; i++) {
                 printf("    Key: %s\n", req.data_union.form_data[i].key);
                 printf("    Value: %s\n", req.data_union.form_data[i].value);
             }
-        } else if (req.data_size > 0 && strcmp(req.content_type, "application/json") == 0) {
-            json_pair_t *current_pair = req.data_union.json_data->head;
-            while (current_pair != NULL)
-            {
-                printf("    Key: %s\n", current_pair->key);
-                printf("    Value: %s\n", current_pair->value->value.string);
-                current_pair = current_pair->next;
-            }
         }
-        
 
-        write(new_socket, RESPONSE, strlen(RESPONSE));
+        write(new_socket, response, strlen(response));
         printf("response sent\n");
 
         close(new_socket); // Close the socket
