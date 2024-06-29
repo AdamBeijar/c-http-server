@@ -20,6 +20,5 @@ char *strip(char *str) {
 
     // Null-terminate the result
     str[len] = '\0';
-
     return str;
 }

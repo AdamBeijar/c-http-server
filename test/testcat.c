@@ -13,7 +13,5 @@ int main() {
     char *boundaryendcat = strdup("--");
     boundaryend = realloc(boundaryend, strlen(boundaryend) + strlen(boundaryendcat) + 1);
     strcat(boundaryend, boundaryendcat);
-    printf("Boundary: %s\n", boundary);
-    printf("Boundaryend: %s\n", boundaryend);
     return 0;
 }

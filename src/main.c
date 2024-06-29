@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include "string_help.h"
+#include "json.h"
 
 #define PORT 8080 // Default port, TODO: make this configurable
 #define RESPONSE \
@@ -19,14 +20,40 @@ void error(char *msg) {
     exit(1);
 }
 
-struct data { // Struct to hold form data
+struct data_struct { // Struct to hold form data
     char *key;
     char *value;
 };
 
+char *create_json_str(char **lines, int line_count) {
+    char *json_str = malloc(1000 * sizeof(char));
+    if (json_str == NULL) {
+        perror("Failed to allocate memory");
+        return NULL;
+    }
+
+    int found_json = 0;
+
+    for (int i = 0; i < line_count; i++) {
+        if (startsWith("{", lines[i]) == 1) {
+            found_json = 1;
+        }
+        if (found_json == 1) {
+            char *line = strdup(lines[i]);
+            line = strip(line);
+            char *newline = malloc(strlen(line) + 1);
+            strcpy(newline, line);
+            json_str = realloc(json_str, strlen(json_str) + strlen(line) + 1);
+            strcat(json_str, line);
+        }
+    }
+
+    return json_str;
+}
+
 // Function to transfer the form string to a struct that is usable
-struct data *create_form(char **lines, char *boundary, char* boundaryend, int line_count, int *form_data_size) {
-    struct data *form_array = malloc(100 * sizeof(struct data)); // Allocate memory for the form data
+struct data_struct *create_form(char **lines, char *boundary, char* boundaryend, int line_count, int *form_data_size) {
+    struct data_struct *form_array = malloc(100 * sizeof(struct data_struct)); // Allocate memory for the form data
     if (form_array == NULL) {
         perror("Failed to allocate memory");
         return NULL;
@@ -113,6 +140,8 @@ int main() {
 
         read(new_socket, buffer, 30000); // Read the request from the client
 
+        printf("%s\n", buffer); // Print the request
+
         int line_count;
         char **lines = split(buffer, "\n", &line_count); // Split the request into lines
 
@@ -122,7 +151,12 @@ int main() {
             char *version;
             char *content_type;
             int content_length;
-            struct data data[100];
+            union
+            {
+                struct data_struct form_data[100];
+                json_object_t *json_data;
+            } data_union;
+            
             int data_size;
         };
 
@@ -158,21 +192,21 @@ int main() {
                         req.content_type[strlen(req.content_type) - 1] = '\0';
                         if(strcmp(req.content_type, "multipart/form-data") == 0) {
 
-                            char *boundary = strdup("--");
-                            char **boundarycat_split = split(lines[i], "=", &word_count);
-                            char *boundarycat = strdup(boundarycat_split[1]);
-                            boundary = realloc(boundary, strlen(boundary) + strlen(boundarycat) + 1);
+                            char *boundary = strdup("--"); // Boundary tag in the form data has 2 more - than it has when its in the content-type
+                            char **boundarycat_split = split(lines[i], "=", &word_count); // Split the line to get the boundary tag
+                            char *boundarycat = strdup(boundarycat_split[1]); // Get the boundary tag
+                            boundary = realloc(boundary, strlen(boundary) + strlen(boundarycat) + 1); // Reallocate memory for the boundary
+                            strcat(boundary, boundarycat); // Concatenate the boundary and the boundarycat
 
-                            char *boundaryendcat = strdup("--");
-                            char *preboundaryendcat = strdup("--");
-                            strcat(boundary, boundarycat);
-                            char *boundaryend = strdup(boundarycat_split[1]);
-                            boundaryend[strlen(boundaryend) - 1] = '\0';
-                            size_t len = strlen(boundaryend);
-                            boundaryend = realloc(boundaryend, strlen(boundaryend) + strlen(boundaryendcat) + 1);
-                            strcat(boundaryend, boundaryendcat);
-                            boundary = realloc(boundary, strlen(boundary) + strlen(preboundaryendcat) + 1);
-                            strcat(preboundaryendcat, boundaryend);
+                            char *boundaryendcat = strdup("--"); // Boundary end tag has 2 - in the end of the tag
+                            char *preboundaryendcat = strdup("--"); // Same reason as above
+                            char *boundaryend = strdup(boundarycat_split[1]); // Get the boundary tag
+                            boundaryend[strlen(boundaryend) - 1] = '\0'; // Remove the \r from the end of the boundaryend and replace it with \0
+                            size_t len = strlen(boundaryend); // Get the length of the boundaryend
+                            boundaryend = realloc(boundaryend, strlen(boundaryend) + strlen(boundaryendcat) + 1); // Reallocate memory for the boundaryend
+                            strcat(boundaryend, boundaryendcat); // Concatenate the boundaryend and the boundaryendcat
+                            boundary = realloc(boundary, strlen(boundary) + strlen(preboundaryendcat) + 1); // Reallocate memory for the boundary
+                            strcat(preboundaryendcat, boundaryend); // Concatenate the preboundaryendcat and the boundaryend
 
                             if (boundary == NULL || boundaryend == NULL) {
                                 perror("realloc failed");
@@ -183,9 +217,11 @@ int main() {
                                 free(words);
                                 continue;
                             }
+
                             int form_data_size;
-                            struct data *form_data = create_form(&lines[i + 1], boundary, preboundaryendcat, line_count, &form_data_size);
-                            req.data_size = form_data_size;
+                            struct data_struct *form_data = create_form(&lines[i + 1], boundary, preboundaryendcat, line_count, &form_data_size); // Create the form data
+                            req.data_size = form_data_size; // Set the form data size
+
                             if (form_data == NULL) {
                                 free(boundary);
                                 for (int j = 0; j < word_count; j++) {
@@ -195,22 +231,80 @@ int main() {
                                 continue;
                             }
 
+                            // Set the data from the form data to the request
                             for (int j = 0; j < req.data_size; j++) {
-                                req.data[j].key = form_data[j].key;
-                                req.data[j].value = form_data[j].value;
+                                req.data_union.form_data[j].key = form_data[j].key;
+                                req.data_union.form_data[j].value = form_data[j].value;
                             }
-                            free(form_data);
-                            free(boundary);
+                            free(form_data); // Free the form data
+                            free(boundary); // Free the boundary
 
                             // Free the words array
                             for (int j = 0; j < word_count; j++) {
                                 free(words[j]);
                             }
                             free(words);
+                        } else if (strcmp(req.content_type, "application/x-www-form-urlencoded") == 0) {
+                            int word_count;
+                            char **words = split(lines[i], " ", &word_count);
+                            if (words != NULL && word_count >= 2) {
+                                int length_split_count;
+                                char *content_length = strdup(lines[i + 1]);
+                                char **content_length_split = split(content_length, " ", &length_split_count);
+                                req.content_length = atoi(content_length_split[1]);
+                                free(words);
+                                free(content_length);
+                                free(content_length_split);
+                                int data_size;
+                                char **data = split(lines[i + 3], "&", &data_size);
+                                for (int j = 0; j < data_size; j++) {
+                                    int key_value_count;
+                                    char **key_value = split(data[j], "=", &key_value_count);
+                                    req.data_union.form_data[j].key = strdup(key_value[0]);
+                                    req.data_union.form_data[j].value = strdup(key_value[1]);
+                                    free(key_value);
+                                }
+                                req.data_size = data_size;
+                                free(data);
+                            }
+                        } else if (strcmp(req.content_type, "application/json") == 0) {
+                            printf("JSON");
+                            int word_count;
+                            char **words = split(lines[i], " ", &word_count);
+                            if (words != NULL && word_count >= 2) {
+                                for (size_t i = 0; i < line_count; i++)
+                                {
+                                    if (startsWith("{", lines[i]) == 1)
+                                    {
+                                        char *json_str = create_json_str(lines, line_count);
+                                        lexer_t *lexer = create_lexer(json_str);
+                                        printf("Lexer input: %s\n", lexer->input);
+                                        json_value_t *value = parse_value(lexer);
+                                        req.data_union.json_data = value->value.object;
+                                        req.data_size = 1;
+                                        break;
+                                    }
+                                }
+                            }
+                            for (int j = 0; j < word_count; j++) {
+                                free(words[j]);
+                            }
+                            free(words);
+                            printf("Content-Type HEJHOPP: %s\n", req.content_type);
+                            break;
+                        } else {
+                            printf("Content-Type: %s\n", req.content_type);
+                            printf("HELL YEAH\n");
                         }
                     }
                 }
-                free(lines[i]); // Free each line after use
+                if(req.content_type == NULL) {
+                    printf("Content-Type: %s\n", req.content_type);
+                    free(lines[i]);
+                } else if (strcmp(req.content_type, "application/json") != 0){
+                    printf("Content-Type: %s\n", req.content_type);
+                    free(lines[i]);
+                }
             }
             free(lines); // Free the array of lines
         }
@@ -221,15 +315,28 @@ int main() {
         printf("Content-Type: %s\n", req.content_type);
         printf("Content-Length: %d\n", req.content_length);
         printf("Data: \n");
-        for (int i = 0; i < req.data_size; i++) {
-            printf("    Name: %s\n", req.data[i].key);
-            printf("    Value: %s\n", req.data[i].value);
+        if (req.data_size == 0) {
+            printf("    No data\n");
+        } else if (req.data_size > 0 && (strcmp(req.content_type, "multipart/form-data") == 0 || strcmp(req.content_type, "application/x-www-form-urlencoded") == 0)) {
+            for (int i = 0; i < req.data_size; i++) {
+                printf("    Key: %s\n", req.data_union.form_data[i].key);
+                printf("    Value: %s\n", req.data_union.form_data[i].value);
+            }
+        } else if (req.data_size > 0 && strcmp(req.content_type, "application/json") == 0) {
+            json_pair_t *current_pair = req.data_union.json_data->head;
+            while (current_pair != NULL)
+            {
+                printf("    Key: %s\n", current_pair->key);
+                printf("    Value: %s\n", current_pair->value->value.string);
+                current_pair = current_pair->next;
+            }
         }
+        
 
         write(new_socket, RESPONSE, strlen(RESPONSE));
         printf("response sent\n");
 
-        close(new_socket);
+        close(new_socket); // Close the socket
 
         // Free req fields after use
         free(req.method);
@@ -237,11 +344,11 @@ int main() {
         free(req.version);
         free(req.content_type);
         for (int i = 0; i < 100; i++) {
-            if (req.data[i].key != NULL) {
-                free(req.data[i].key);
+            if (req.data_union.form_data[i].key != NULL) {
+                free(req.data_union.form_data[i].key);
             }
-            if (req.data[i].value != NULL) {
-                free(req.data[i].value);
+            if (req.data_union.form_data[i].value != NULL) {
+                free(req.data_union.form_data[i].value);
             }
         }
     }
