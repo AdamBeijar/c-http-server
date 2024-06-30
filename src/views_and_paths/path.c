@@ -44,7 +44,13 @@ char *find_view(request_t *req) {
         if (current_path[current_path_len - 1] == '/') {
             current_path[current_path_len - 1] = '\0';
         }
-        if(startWithStr("/static/", path) == 1) {
+        if(startWithStr("/static/", path) == 1) { 
+        /*
+        If the path starts with "/static/", it is a static file.
+        To get static files working properly, you need to create a folder called "static" in the root of your project. And after that place the static files in a directory with the correct name.
+        So if you want to serve a css file, you need to place it in the "static/css" directory, and if you want to serve a js file, you need to place it in the "static/js" or "static/javascript" directory.
+        Every other files should be placed in a directory with the same name as the first part of the content-type, e.g if you have a png, you need to place it in the "static/image" directory, and if you have a json file, you need to place it in the "static/application" directory.
+        */
             int static_path_count = 0;
             char **static_path_split = split(path, "/", &static_path_count);
             for (int i = 0; i < static_path_count; i++) {
