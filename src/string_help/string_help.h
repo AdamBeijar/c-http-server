@@ -39,3 +39,10 @@ void *removeAllSubString(char *str, char *subStr);
 char *strip(char *str);
 
 #endif // STRIP_H
+
+#ifndef REPLACE_H
+#define REPLACE_H
+
+char *replace(char *str, char *old, char *new);
+
+#endif // REPLACE_H

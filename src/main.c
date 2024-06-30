@@ -137,7 +137,7 @@ int main() {
 
         read(new_socket, buffer, 30000); // Read the request from the client
 
-        //printf("%s\n", buffer); // Print the request
+        printf("%s\n", buffer); // Print the request
 
         int line_count;
         char **lines = split(buffer, "\n", &line_count); // Split the request into lines
@@ -179,7 +179,6 @@ int main() {
                         req.content_type = strdup(words[1]);
                         req.content_type[strlen(req.content_type) - 1] = '\0';
                         if(strcmp(req.content_type, "multipart/form-data") == 0) {
-
                             char *boundary = strdup("--"); // Boundary tag in the form data has 2 more - than it has when its in the content-type
                             char **boundarycat_split = split(lines[i], "=", &word_count); // Split the line to get the boundary tag
                             char *boundarycat = strdup(boundarycat_split[1]); // Get the boundary tag
@@ -309,12 +308,22 @@ int main() {
             printf("Path: %s\n", req.path);
             int query_count;
             char **query_split = split(query, "&", &query_count);
-            for (int i = 0; i < line_count - 1; i++) {
+            int param_count = 0;
+            printf("data_size: %d\n", req.data_size);
+            for (int i = 0; i < query_count; i++) {
                 char **key_value = split(query_split[i], "=", &line_count);
-                req.data_union.form_data[i].key = strdup(key_value[0]);
-                req.data_union.form_data[i].value = strdup(key_value[1]);
-                req.data_size++;
+                req.data_union.form_data[req.data_size + i].key = strdup(key_value[0]);
+                req.data_union.form_data[req.data_size + i].value = strdup(key_value[1]);
+                param_count++;
             }
+            printf("param_count: %d\n", param_count);
+            req.data_size += param_count;
+            printf("data_size: %d\n", req.data_size);
+        }
+
+        for (int i = 0; i < req.data_size; i++) {
+            printf("Key: %s\n", req.data_union.form_data[i].key);
+            printf("Value: %s\n", req.data_union.form_data[i].value);
         }
 
         response = find_view(&req); // Find the view that should be used

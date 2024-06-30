@@ -6,4 +6,8 @@
 
 view_t *index_view(struct request *req);
 
+view_t *contact_view(struct request *req);
+
+view_t *index_post_view(struct request *req);
+
 #endif
