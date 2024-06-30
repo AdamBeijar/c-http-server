@@ -3,6 +3,8 @@
 #include <string.h>
 #include "../request_type/request_type.h"
 #include "views.h"
+#include "../string_help/string_help.h"
+#include "static.h"
 
 typedef struct path_t {
     char *path;
@@ -25,7 +27,7 @@ char *create_response(view_t view) {
 }
 
 // Find the view that corresponds to the path
-char *find_view(struct request *req) {
+char *find_view(request_t *req) {
     path_t paths[] = { // Here you add the paths and the corresponding views, with {"/path", "METHOD", view_function}
         {"/", "GET", index_view},
         {"/contact", "GET", contact_view},
@@ -41,6 +43,15 @@ char *find_view(struct request *req) {
         size_t current_path_len = strlen(current_path);
         if (current_path[current_path_len - 1] == '/') {
             current_path[current_path_len - 1] = '\0';
+        }
+        if(startWithStr("/static/", path) == 1) {
+            int static_path_count = 0;
+            char **static_path_split = split(path, "/", &static_path_count);
+            for (int i = 0; i < static_path_count; i++) {
+                view_t *static_response = handle_static(path, static_path_split, static_path_count);
+                char *response = create_response(*static_response);
+                return response;
+            }
         }
         if (strcmp(current_path, path) == 0 && strcmp(paths[i].method, req->method) == 0) { // If the path and method match, return the view
             view_t *view_response = paths[i].view(req); // Call the view function

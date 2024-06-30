@@ -2,6 +2,7 @@
     "files.associations": {
         "request_type.h": "c",
         "stdio.h": "c",
-        "path.h": "c"
+        "path.h": "c",
+        "string_help.h": "c"
     }
 }

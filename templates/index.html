@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>{{ name }}'s website</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="/static/css/index-styles.css">
 </head>
 <body>
     <header>
@@ -18,9 +18,13 @@
     </nav>
 
     <main>
+        <button id="addOne">+ 1</button>
+        <p id="count">0</p>
+    </main>
 
     <footer>
         <p>&copy; 2022 {{ name }} Website. All rights reserved.</p>
     </footer>
+    <script src="/static/js/index.js"></script>
 </body>
 </html>

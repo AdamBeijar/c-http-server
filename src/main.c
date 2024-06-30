@@ -129,6 +129,9 @@ int main() {
         error("listen failed");
     }
 
+    //clear the console
+    printf("\033[H\033[J");
+
     while (1) {
         printf("\n+++++++ Waiting for new connection ++++++++\n\n");
         if ((new_socket = accept(server_fd, (struct sockaddr *) &address, (socklen_t *) &address)) < 0) {
@@ -137,7 +140,7 @@ int main() {
 
         read(new_socket, buffer, 30000); // Read the request from the client
 
-        printf("%s\n", buffer); // Print the request
+        // printf("%s\n", buffer); // Print the request
 
         int line_count;
         char **lines = split(buffer, "\n", &line_count); // Split the request into lines
@@ -154,16 +157,11 @@ int main() {
                     int word_count;
                     char **words = split(lines[i], " ", &word_count);
                     if (words != NULL && word_count >= 3) {
-                        req.method = realloc(req.method, strlen(words[0]) + 1);
-                        req.path = realloc(req.path, strlen(words[1]) + 1);
+                        req.method = realloc(req.method, strlen(words[0]) + 1);                        req.path = realloc(req.path, strlen(words[1]) + 1);
                         req.version = realloc(req.version, strlen(words[2]) + 1);
                         req.method = strdup(words[0]);
                         req.path = strdup(words[1]);
                         req.version = strdup(words[2]);
-
-                        printf("Path: %s\n", req.path);
-
-
                         // Free the words array
                         for (int j = 0; j < word_count; j++) {
                             free(words[j]);
@@ -304,30 +302,19 @@ int main() {
             char **path_split = split(current_path, "?", &line_count);
             req.path = strdup(path_split[0]);
             char *query = strdup(path_split[1]);
-            printf("Query: %s\n", query);
-            printf("Path: %s\n", req.path);
             int query_count;
             char **query_split = split(query, "&", &query_count);
             int param_count = 0;
-            printf("data_size: %d\n", req.data_size);
             for (int i = 0; i < query_count; i++) {
                 char **key_value = split(query_split[i], "=", &line_count);
                 req.data_union.form_data[req.data_size + i].key = strdup(key_value[0]);
                 req.data_union.form_data[req.data_size + i].value = strdup(key_value[1]);
                 param_count++;
             }
-            printf("param_count: %d\n", param_count);
             req.data_size += param_count;
-            printf("data_size: %d\n", req.data_size);
-        }
-
-        for (int i = 0; i < req.data_size; i++) {
-            printf("Key: %s\n", req.data_union.form_data[i].key);
-            printf("Value: %s\n", req.data_union.form_data[i].value);
         }
 
         response = find_view(&req); // Find the view that should be used
-        printf("response: %s\n", response);
 
         // Print the request
         printf("Method: %s\n", req.method);

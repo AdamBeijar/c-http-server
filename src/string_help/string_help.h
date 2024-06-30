@@ -5,6 +5,13 @@ int startsWith(const char *str, const char *prefix);
 
 #endif
 
+#ifndef STARTSWITHSTR_H
+#define STARTSWITHSTR_H
+
+int startWithStr(const char *pre, const char *str);
+
+#endif
+
 #ifndef SPLIT_H
 #define SPLIT_H
 
